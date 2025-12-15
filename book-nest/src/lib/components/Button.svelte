@@ -1,8 +1,29 @@
 <script lang="ts">
   let { children, ...props } = $props();
+
+  let loading = $state(false);
+
+  async function onclick() {
+    if (loading) return;
+    loading = true;
+
+    try {
+      const response = await fetch("/api/checkout", { method: "POST" });
+      const payload = await response.json();
+
+      if (!response.ok) throw new Error(payload?.error ?? "Checkout failed");
+
+      // ✅ Modern redirect: use the Checkout Session URL
+      window.location.assign(payload.url);
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message ?? "Unable to start checkout");
+      loading = false;
+    }
+  }
 </script>
 
-<button {...props}>{@render children()}</button>
+<button {...props} {onclick}>{@render children()}</button>
 
 <style>
   a {
