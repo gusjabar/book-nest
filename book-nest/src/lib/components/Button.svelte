@@ -13,7 +13,7 @@
 
       if (!response.ok) throw new Error(payload?.error ?? "Checkout failed");
 
-      // ✅ Modern redirect: use the Checkout Session URL
+      // ✅ Modern redirect: use the Checkout Session URL by the server
       window.location.assign(payload.url);
     } catch (err: any) {
       console.error(err);
