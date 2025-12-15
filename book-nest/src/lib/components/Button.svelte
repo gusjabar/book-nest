@@ -1,3 +1,9 @@
+<script lang="ts">
+  let { children, ...props } = $props();
+</script>
+
+<button {...props}>{@render children()}</button>
+
 <style>
   a {
     display: block;
@@ -33,5 +39,20 @@
   .btn-menu {
     min-width: 150px;
     padding: 8px 20px;
+  }
+  button {
+    background-color: black;
+    color: white;
+    padding: 12px 24px;
+    font-size: 22px;
+    text-transform: uppercase;
+    transition: all 0.5s;
+    border: 1px solid white;
+  }
+
+  button:hover {
+    cursor: pointer;
+    background-color: white;
+    color: black;
   }
 </style>
