@@ -14,6 +14,8 @@ const stripe = new Stripe(PRIVATE_STRIPE_KEY);
 sgMail.setApiKey(SENDGRID_API_KEY);
 
 export async function POST({ request }) {
+  console.log("Webhook received");
+  // ✅ STRIPE SIGNATURE VERIFICATION
   const sig = request.headers.get("stripe-signature");
   if (!sig)
     return json({ error: "Missing Stripe-Signature header" }, { status: 400 });
@@ -23,7 +25,11 @@ export async function POST({ request }) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, PRIVATE_STRIPE_WEBHOOK_SECRET);
+    event = stripe.webhooks.constructEvent(
+      rawBody,
+      sig,
+      PRIVATE_STRIPE_WEBHOOK_SECRET
+    );
   } catch (err: any) {
     console.error("Webhook signature verification failed:", err.message);
     return json({ error: "Invalid signature" }, { status: 400 });
@@ -65,7 +71,7 @@ export async function POST({ request }) {
       },
     ],
   };
-console.log(emailContent);
+  console.log(emailContent);
   await sgMail.send(emailContent);
 
   return json({ received: true });
