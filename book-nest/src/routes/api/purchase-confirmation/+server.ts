@@ -1,59 +1,61 @@
+import Stripe from "stripe";
 import { json } from "@sveltejs/kit";
 import sgMail from "@sendgrid/mail";
 import { Buffer } from "node:buffer";
 import {
+  PRIVATE_STRIPE_KEY,
+  PRIVATE_STRIPE_WEBHOOK_SECRET,
   SENDGRID_API_KEY,
-  PRIVATE_EBOOK_URL,
   SENDGRID_EMAIL_FROM,
+  PRIVATE_EBOOK_URL,
 } from "$env/static/private";
 
+const stripe = new Stripe(PRIVATE_STRIPE_KEY);
 sgMail.setApiKey(SENDGRID_API_KEY);
 
 export async function POST({ request }) {
-  const evt = await request.json();
+  const sig = request.headers.get("stripe-signature");
+  if (!sig)
+    return json({ error: "Missing Stripe-Signature header" }, { status: 400 });
 
-  console.log("stripe event type:", evt?.type);
-  console.log("stripe object type:", evt?.data?.object?.object);
+  // ✅ RAW BODY BYTES (no JSON parsing, no string decoding)
+  const rawBody = Buffer.from(await request.arrayBuffer());
 
-  // ✅ Only fulfill on Checkout completion
-  if (evt?.type !== "checkout.session.completed") {
-    return json({ received: true }); // return 200 to Stripe
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, sig, PRIVATE_STRIPE_WEBHOOK_SECRET);
+  } catch (err: any) {
+    console.error("Webhook signature verification failed:", err.message);
+    return json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  const session = evt.data.object; // checkout.session
+  // ✅ Only fulfill on the event you care about
+  if (event.type !== "checkout.session.completed") {
+    return json({ received: true });
+  }
 
-  const customerEmail = session?.customer_details?.email ?? null;
-  const customerName = session?.customer_details?.name ?? "Customer";
+  const session = event.data.object as Stripe.Checkout.Session;
+
+  const customerEmail = session.customer_details?.email;
+  const customerName = session.customer_details?.name ?? "Customer";
 
   if (!customerEmail) {
-    // If you want, you can retrieve the session from Stripe here for more data.
-    return json(
-      { success: false, message: "No customer email in session" },
-      { status: 400 }
-    );
+    return json({ error: "No customer email on session" }, { status: 400 });
   }
 
   const response = await fetch(PRIVATE_EBOOK_URL);
-  if (!response.ok) {
-    return json(
-      { success: false, message: "Failed to fetch the ebook" },
-      { status: 500 }
-    );
-  }
+  if (!response.ok)
+    return json({ error: "Failed to fetch ebook" }, { status: 500 });
 
-  const pdfBuffer = await response.arrayBuffer();
-  const pdfBase64 = Buffer.from(pdfBuffer).toString("base64");
-
-  // Checkout Sessions use amount_total + currency
-  const amount = session?.amount_total ?? "unknown";
-  const currency = session?.currency ?? "unknown";
-  const sessionId = session?.id ?? "unknown";
+  const pdfBase64 = Buffer.from(await response.arrayBuffer()).toString(
+    "base64"
+  );
 
   const emailContent = {
     to: customerEmail,
     from: SENDGRID_EMAIL_FROM,
     subject: "Payment Confirmation",
-    text: `Dear ${customerName},\n\nYour payment of ${amount} ${currency} for the order ${sessionId} has been confirmed.\n\nThank you for your purchase!`,
+    text: `Dear ${customerName},\n\nYour payment has been confirmed.\n\nThank you for your purchase!`,
     attachments: [
       {
         content: pdfBase64,
@@ -63,15 +65,8 @@ export async function POST({ request }) {
       },
     ],
   };
+console.log(emailContent);
+  await sgMail.send(emailContent);
 
-  try {
-    await sgMail.send(emailContent);
-    return json({ success: true, message: "Email sent successfully" });
-  } catch (error) {
-    console.error(error);
-    return json(
-      { success: false, message: "Failed to send email" },
-      { status: 500 }
-    );
-  }
+  return json({ received: true });
 }
