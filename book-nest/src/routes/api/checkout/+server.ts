@@ -15,8 +15,8 @@ export async function POST({ url }) {
     line_items: [{ price: PRICE_ID, quantity: 1 }],
 
     // Modern approach: let Stripe decide eligible methods.
-    payment_method_types: ["card"],
-
+    payment_method_types: ["card"], 
+   
     success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/checkout/failure?session_id={CHECKOUT_SESSION_ID}`,
 
